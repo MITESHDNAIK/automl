@@ -1,56 +1,111 @@
-import React from "react";
-import Plot from "react-plotly.js";
-import axios from "axios";
+import React from 'react';
+import Plot from 'react-plotly.js';
+import { TrendingUp, Lightbulb, Award, BarChart3 } from 'lucide-react';
 
-export default function Results({uploadInfo}) {
-  const [trainRes, setTrainRes] = React.useState(null);
-  const [params, setParams] = React.useState({max_depth: 5, n_estimators: 100});
-
-  async function handleTrain(){
-    const payload = {
-      upload_path: uploadInfo.upload_path,
-      target_column: uploadInfo.stats.target,
-      max_depth: params.max_depth || null,
-      n_estimators: params.n_estimators
-    };
-    const res = await axios.post("http://localhost:8000/train", payload);
-    setTrainRes(res.data);
-  }
+const Results = ({ trainResults }) => {
+  const { best_model, perf_plotly, confusion_plotly, explanation } = trainResults;
 
   return (
-    <div>
-      <h3>Upload summary</h3>
-      <pre>{JSON.stringify(uploadInfo.stats, null, 2)}</pre>
-      <div>
-        <label>max_depth</label>
-        <input type="number" value={params.max_depth} onChange={e=>setParams({...params, max_depth: parseInt(e.target.value)})}/>
-        <label>n_estimators</label>
-        <input type="number" value={params.n_estimators} onChange={e=>setParams({...params, n_estimators: parseInt(e.target.value)})}/>
-        <button onClick={handleTrain}>Train</button>
+    <div className="space-y-6">
+      {/* AI Recommendation Card */}
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-6">
+        <div className="flex items-start space-x-3">
+          <div className="bg-purple-100 rounded-full p-2">
+            <Lightbulb className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              🧠 AI Recommendation
+            </h3>
+            <p className="text-gray-700 leading-relaxed">{explanation}</p>
+          </div>
+        </div>
       </div>
 
-      {trainRes && (
-        <>
-          <h4>Results</h4>
-          <pre>{JSON.stringify(trainRes.results, null, 2)}</pre>
-          <p><strong>Best:</strong> {trainRes.best_model}</p>
-          <p>{trainRes.explanation}</p>
+      {/* Best Model Result */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center space-x-2 mb-4">
+          <Award className="h-5 w-5 text-green-600" />
+          <h2 className="text-xl font-semibold text-gray-900">Best Performing Model</h2>
+        </div>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-100 rounded-full p-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-green-900">{best_model}</p>
+              <p className="text-sm text-green-700">Selected as the optimal model for your dataset</p>
+            </div>
+          </div>
+        </div>
 
-          <h4>Performance Chart</h4>
-          <Plot
-            data={JSON.parse(trainRes.perf_plotly).data}
-            layout={JSON.parse(trainRes.perf_plotly).layout}
-            style={{width: '100%', height: 400}}
-          />
+        {/* Performance Visualization */}
+        {perf_plotly && (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Performance Comparison</h3>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                This chart compares the models based on two key metrics. <strong>Accuracy</strong> is the percentage of correct predictions. 
+                <strong> F1 Macro</strong> is the harmonic mean of precision and recall, providing a balanced measure of performance, 
+                especially for imbalanced datasets.
+              </p>
+            </div>
 
-          <h4>Confusion Matrix</h4>
-          <Plot
-            data={JSON.parse(trainRes.cm_plotly).data}
-            layout={JSON.parse(trainRes.cm_plotly).layout}
-            style={{width: '100%', height: 400}}
-          />
-        </>
+            <div className="border border-gray-200 rounded-lg p-4">
+              <Plot
+                data={JSON.parse(perf_plotly).data}
+                layout={{
+                  ...JSON.parse(perf_plotly).layout,
+                  autosize: true,
+                  responsive: true,
+                  font: { family: 'Inter, system-ui, sans-serif' }
+                }}
+                style={{ width: '100%', height: '400px' }}
+                config={{ responsive: true, displayModeBar: false }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Confusion Matrix */}
+      {confusion_plotly && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-purple-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Confusion Matrix</h3>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="text-sm text-gray-700 leading-relaxed">
+              The confusion matrix shows how well the model predicts each class. Diagonal values represent correct predictions, 
+              while off-diagonal values show misclassifications.
+            </p>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <Plot
+              data={JSON.parse(confusion_plotly).data}
+              layout={{
+                ...JSON.parse(confusion_plotly).layout,
+                autosize: true,
+                responsive: true,
+                font: { family: 'Inter, system-ui, sans-serif' }
+              }}
+              style={{ width: '100%', height: '400px' }}
+              config={{ responsive: true, displayModeBar: false }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
-}
+};
+
+export default Results;
