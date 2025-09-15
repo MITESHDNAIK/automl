@@ -1,0 +1,13 @@
+scheme_id,scheme_name,description,target_states,benefit
+CSS-001,PMAY-G (Gramin),Pucca houses for eligible ST households (priority where households lack pucca houses).,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Grant for pucca house construction
+CSS-002,PMGSY (Road Connectivity),All-weather roads to connect targeted ST habitations.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Road construction funding
+CSS-003,Jal Jeevan Mission (JJM),Functional Household Tap Connections (FHTC) and community taps for small hamlets (≤20 HH).,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Piped water supply infrastructure and community taps.
+CSS-004,RDSS (House Electrification),Electrification of unelectrified households and public institutions.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Grid connection or electrification support
+CSS-005,New Solar Power Scheme (Off-grid),Solar systems for unelectrified households/public institutions (up to 2-3 kW).,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Subsidy for off-grid solar systems
+CSS-006,MMU (NHM),Mobile Medical Units for habitations where nearest health facility is far.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Provision of MMU services to village
+CSS-007,PMJAY (Ayushman Bharat),Health insurance coverage for eligible households under the Abhiyan.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Health insurance coverage (PMJAY)
+CSS-008,PMUY (Ujjwala),LPG connections to uncovered eligible households.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",LPG connection subsidy
+CSS-009,PMMSY (Fisheries),Support for aquaculture and fish culture; special allocation for CFR holders and tribal fishermen.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Subsidies for aquaculture units and community support
+CSS-010,NLM (National Livestock Mission),Animal husbandry & livestock support for FRA beneficiaries.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Subsidies/assistance for livestock rearing
+CSS-011,MGNREGA (Works),Employment for public works including farm-ponds and irrigation works.,"['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']","Wage employment for public works (farm ponds, irrigation)"
+CSS-012,PMAAGY (MoTA multi-sector),"Integrated village development, FRA support, marketing centres, and project management funds.","['Telangana', 'Odisha', 'Tripura', 'Madhya Pradesh']",Integrated development package and grants
