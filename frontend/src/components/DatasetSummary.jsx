@@ -1,8 +1,9 @@
 import React from 'react';
-import { BarChart3, Target, AlertTriangle, Database } from 'lucide-react';
+import { BarChart3, Target, AlertTriangle, Database, Hash } from 'lucide-react';
+import Plot from 'react-plotly.js';
 
 const DatasetSummary = ({ uploadInfo }) => {
-  const { stats } = uploadInfo;
+  const { stats, numerical_data_for_plot } = uploadInfo;
 
   const summaryCards = [
     {
@@ -108,6 +109,39 @@ const DatasetSummary = ({ uploadInfo }) => {
           </div>
         </div>
       </div>
+
+      {/* Pre-ML Plot - Added Section */}
+      {Object.keys(numerical_data_for_plot || {}).length > 0 && (
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <Hash className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-xl font-semibold text-gray-900">Numerical Feature Distributions</h3>
+          </div>
+          <div className="space-y-6">
+            {Object.entries(numerical_data_for_plot).map(([column, data]) => (
+              <div key={column} className="border border-gray-200 rounded-lg p-4">
+                <Plot
+                  data={[{
+                    type: 'histogram',
+                    x: data,
+                    marker: { color: '#6366F1' },
+                  }]}
+                  layout={{
+                    title: `Distribution of '${column}'`,
+                    xaxis: { title: column },
+                    yaxis: { title: 'Count' },
+                    autosize: true,
+                    responsive: true,
+                    font: { family: 'Inter, system-ui, sans-serif' },
+                  }}
+                  style={{ width: '100%', height: '300px' }}
+                  config={{ responsive: true, displayModeBar: false }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

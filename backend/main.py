@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 import plotly.graph_objects as go
 from sentence_transformers import SentenceTransformer, util
 from ml_utils import load_df, preprocess
+from pandas.api.types import is_numeric_dtype
 
 app = FastAPI()
 app.add_middleware(
@@ -48,6 +49,10 @@ async def upload_csv(file: UploadFile = File(...), target_column: str = Form(Non
 
         target = target_column if target_column in df.columns else df.columns[-1]
 
+        # Prepare data for frontend visualization
+        numerical_cols = [col for col in df.columns if is_numeric_dtype(df[col])]
+        numerical_data_for_plot = {col: df[col].dropna().tolist() for col in numerical_cols}
+
         preview = df.head(5).to_dict(orient="records")
         stats = {
             "shape": df.shape,
@@ -66,7 +71,8 @@ async def upload_csv(file: UploadFile = File(...), target_column: str = Form(Non
             "ok": True,
             "preview": preview,
             "stats": stats,
-            "upload_path": save_path
+            "upload_path": save_path,
+            "numerical_data_for_plot": numerical_data_for_plot
         })
 
     except Exception as e:
@@ -126,6 +132,22 @@ def train(req: TrainRequest):
     cm_fig = go.Figure(data=go.Heatmap(z=cm, x=list(range(cm.shape[1])), y=list(range(cm.shape[0]))))
     cm_fig.update_layout(title=f"Confusion Matrix ({best_model_name})")
 
+    # Add Feature Importance Plot
+    feature_importances = best_model.feature_importances_
+    sorted_idx = np.argsort(feature_importances)
+    feature_importance_fig = go.Figure(data=go.Bar(
+        y=X.columns[sorted_idx],
+        x=feature_importances[sorted_idx],
+        orientation='h'
+    ))
+    feature_importance_fig.update_layout(
+        title="Feature Importance",
+        xaxis_title="Importance",
+        yaxis_title="Feature",
+        margin=dict(l=150)
+    )
+
+
     # Simple semantic "recommendation" using embeddings
     df_summary = f"rows:{df.shape[0]} cols:{df.shape[1]} numeric:{len(X.select_dtypes(include=['number']).columns)}"
     ds_emb = embedder.encode(df_summary, convert_to_tensor=True)
@@ -140,5 +162,6 @@ def train(req: TrainRequest):
         "best_model": best_model_name,
         "perf_plotly": fig.to_json(),
         "cm_plotly": cm_fig.to_json(),
+        "feature_importance_plotly": feature_importance_fig.to_json(),
         "explanation": explanation
     }

@@ -1,9 +1,9 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
-import { TrendingUp, Lightbulb, Award, BarChart3 } from 'lucide-react';
+import { TrendingUp, Lightbulb, Award, BarChart3, Target } from 'lucide-react';
 
 const Results = ({ trainResults }) => {
-  const { best_model, perf_plotly, confusion_plotly, explanation } = trainResults;
+  const { best_model, perf_plotly, confusion_plotly, feature_importance_plotly, explanation } = trainResults;
 
   return (
     <div className="space-y-6">
@@ -94,6 +94,36 @@ const Results = ({ trainResults }) => {
               data={JSON.parse(confusion_plotly).data}
               layout={{
                 ...JSON.parse(confusion_plotly).layout,
+                autosize: true,
+                responsive: true,
+                font: { family: 'Inter, system-ui, sans-serif' }
+              }}
+              style={{ width: '100%', height: '400px' }}
+              config={{ responsive: true, displayModeBar: false }}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Feature Importance Plot - Added Section */}
+      {feature_importance_plotly && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <Target className="h-5 w-5 text-teal-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Feature Importance</h3>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="text-sm text-gray-700 leading-relaxed">
+              This chart shows which features in your dataset were most important for the best model to make its predictions.
+            </p>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <Plot
+              data={JSON.parse(feature_importance_plotly).data}
+              layout={{
+                ...JSON.parse(feature_importance_plotly).layout,
                 autosize: true,
                 responsive: true,
                 font: { family: 'Inter, system-ui, sans-serif' }
