@@ -6,3 +6,5 @@ joblib
 sentence-transformers
 plotly
 python-multipart
+xgboost
+numpy

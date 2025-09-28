@@ -6,26 +6,30 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
   const [params, setParams] = useState({
     max_depth: 5,
     n_estimators: 100,
+    kernel: 'rbf',
+    n_neighbors: 5,
+    n_clusters: 3,
+    n_components: 2,
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Generate demo training results
+  // Generate enhanced demo training results
   const generateDemoResults = () => {
     return {
       best_model: "Random Forest",
-      explanation: "Based on your dataset analysis, Random Forest performed best with an accuracy of 94.2% and F1-macro score of 0.91. The model shows excellent performance across all classes with minimal overfitting. Random Forest is particularly effective for your dataset because it handles mixed data types well and provides robust predictions through ensemble learning.",
+      explanation: "Based on your dataset analysis, Random Forest performed best, achieving 94.2% accuracy and 0.91 F1-macro score. Random Forest is robust ensemble method that reduces overfitting. Handles mixed data types well, provides feature importance, and works with missing values. It's particularly effective for your dataset because it provides robust predictions through ensemble learning.",
       perf_plotly: JSON.stringify({
         data: [
           {
-            x: ['Decision Tree', 'Random Forest'],
-            y: [0.87, 0.942],
+            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes', 'XGBoost'],
+            y: [0.87, 0.942, 0.89, 0.91, 0.85, 0.88, 0.935],
             type: 'bar',
             name: 'Accuracy',
             marker: { color: '#3B82F6' }
           },
           {
-            x: ['Decision Tree', 'Random Forest'],
-            y: [0.83, 0.91],
+            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes', 'XGBoost'],
+            y: [0.83, 0.91, 0.86, 0.89, 0.82, 0.85, 0.925],
             type: 'bar',
             name: 'F1 Macro',
             marker: { color: '#8B5CF6' }
@@ -52,6 +56,23 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
           xaxis: { title: 'Predicted Class' },
           yaxis: { title: 'True Class' }
         }
+      }),
+      feature_importance_plotly: JSON.stringify({
+        data: [
+          {
+            x: [0.25, 0.18, 0.15, 0.12, 0.10, 0.08, 0.07, 0.05],
+            y: ['credit_score', 'income', 'debt_ratio', 'age', 'experience', 'education_years', 'employment_type', 'region'],
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: 'teal' }
+          }
+        ],
+        layout: {
+          title: 'Top 8 Feature Importance - Random Forest',
+          xaxis: { title: 'Importance' },
+          yaxis: { title: 'Features' },
+          height: 400
+        }
       })
     };
   };
@@ -65,6 +86,10 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
         target_column: uploadInfo.stats.target,
         max_depth: params.max_depth || null,
         n_estimators: params.n_estimators,
+        kernel: params.kernel,
+        n_neighbors: params.n_neighbors,
+        n_clusters: params.n_clusters,
+        n_components: params.n_components,
       };
 
       // Check if this is demo mode (demo upload path)
@@ -79,7 +104,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
 
       // Try real backend
       const response = await axios.post('http://localhost:8000/train', payload, {
-        timeout: 30000, // 30 second timeout for training
+        timeout: 60000, // 60 second timeout for training multiple models
       });
       onTrainComplete(response.data);
     } catch (error) {
@@ -106,7 +131,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
   const handleParamChange = (param, value) => {
     setParams(prev => ({
       ...prev,
-      [param]: parseInt(value) || null,
+      [param]: param === 'kernel' ? value : (parseInt(value) || null),
     }));
   };
 
@@ -133,12 +158,49 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
         </button>
       </div>
 
+      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start space-x-2">
+          <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-medium text-blue-900 mb-2">Available Algorithms</h3>
+            <p className="text-sm text-blue-800 mb-2">
+              The system will automatically test multiple algorithms and select the best performer:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-blue-700">
+              <div>
+                <strong>Classification:</strong>
+                <ul className="list-disc list-inside ml-2">
+                  <li>Decision Tree</li>
+                  <li>Random Forest</li>
+                  <li>Logistic Regression</li>
+                  <li>Support Vector Machine</li>
+                  <li>K-Nearest Neighbors</li>
+                  <li>Naive Bayes</li>
+                  <li>XGBoost</li>
+                </ul>
+              </div>
+              <div>
+                <strong>Regression:</strong>
+                <ul className="list-disc list-inside ml-2">
+                  <li>Linear Regression</li>
+                  <li>Decision Tree Regressor</li>
+                  <li>Random Forest Regressor</li>
+                  <li>Support Vector Regression</li>
+                  <li>K-Nearest Neighbors</li>
+                  <li>XGBoost Regressor</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Parameter Controls */}
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Decision Tree Max Depth
+              Tree Max Depth
             </label>
             <input
               type="number"
@@ -147,18 +209,18 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
               value={params.max_depth || ''}
               onChange={(e) => handleParamChange('max_depth', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Default: 5"
+              placeholder="Default: Auto"
             />
             {showAdvanced && (
               <p className="text-xs text-gray-600 mt-1">
-                Controls how deep the decision tree can grow. Lower values prevent overfitting.
+                Controls tree depth for Decision Tree and Random Forest. Lower values prevent overfitting.
               </p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Random Forest Estimators
+              Forest Estimators
             </label>
             <input
               type="number"
@@ -171,7 +233,48 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
             />
             {showAdvanced && (
               <p className="text-xs text-gray-600 mt-1">
-                Number of trees in the random forest. More trees usually improve accuracy but increase training time.
+                Number of trees in Random Forest. More trees improve accuracy but increase training time.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              SVM Kernel
+            </label>
+            <select
+              value={params.kernel}
+              onChange={(e) => handleParamChange('kernel', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="rbf">RBF (Radial Basis Function)</option>
+              <option value="linear">Linear</option>
+              <option value="poly">Polynomial</option>
+              <option value="sigmoid">Sigmoid</option>
+            </select>
+            {showAdvanced && (
+              <p className="text-xs text-gray-600 mt-1">
+                Kernel function for SVM. RBF works well for most datasets with non-linear patterns.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              KNN Neighbors
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={params.n_neighbors || ''}
+              onChange={(e) => handleParamChange('n_neighbors', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Default: 5"
+            />
+            {showAdvanced && (
+              <p className="text-xs text-gray-600 mt-1">
+                Number of nearest neighbors for KNN algorithm. Lower values capture local patterns but may overfit.
               </p>
             )}
           </div>
@@ -179,44 +282,69 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
           <button
             onClick={handleTrain}
             disabled={loading}
-            className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-3 rounded-md font-medium transition-colors duration-200"
+            className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:bg-gray-400 text-white px-4 py-3 rounded-md font-medium transition-all duration-200 shadow-lg"
           >
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>{isDemoMode ? 'Running Demo Training...' : 'Training Models...'}</span>
+                <span>{isDemoMode ? 'Running Demo Training...' : 'Training All Models...'}</span>
               </>
             ) : (
               <>
                 <Play className="h-4 w-4" />
-                <span>Train Models</span>
+                <span>Train & Compare Models</span>
               </>
             )}
           </button>
+
+          {loading && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium">Training Progress:</p>
+              <p className="text-xs text-blue-600 mt-1">
+                Testing multiple algorithms to find the best performer for your dataset...
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Information Panel */}
         {showAdvanced && (
-          <div className="bg-blue-50 rounded-lg p-4">
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
             <div className="flex items-start space-x-2">
               <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="font-medium text-blue-900 mb-2">Hyperparameter Tuning Guide</h3>
-                <div className="space-y-3 text-sm text-blue-800">
-                  <div>
-                    <p className="font-medium">Max Depth (Decision Tree):</p>
-                    <ul className="list-disc list-inside space-y-1 text-blue-700">
-                      <li>Lower values (3-5): Prevent overfitting, good for small datasets</li>
-                      <li>Higher values (10+): Capture complex patterns, risk overfitting</li>
+                <h3 className="font-medium text-blue-900 mb-3">Algorithm Selection Guide</h3>
+                <div className="space-y-4 text-sm">
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="font-medium text-gray-800 mb-2">Tree-Based Models:</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700 text-xs">
+                      <li><strong>Decision Tree:</strong> Interpretable but prone to overfitting</li>
+                      <li><strong>Random Forest:</strong> Robust ensemble, handles mixed data well</li>
+                      <li><strong>XGBoost:</strong> State-of-the-art gradient boosting</li>
                     </ul>
                   </div>
-                  <div>
-                    <p className="font-medium">N Estimators (Random Forest):</p>
-                    <ul className="list-disc list-inside space-y-1 text-blue-700">
-                      <li>Start with 100 for most datasets</li>
-                      <li>Increase to 200-500 for better accuracy (slower training)</li>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="font-medium text-gray-800 mb-2">Linear Models:</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700 text-xs">
+                      <li><strong>Linear/Logistic Regression:</strong> Fast, interpretable</li>
+                      <li><strong>SVM:</strong> Powerful for high-dimensional data</li>
                     </ul>
                   </div>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="font-medium text-gray-800 mb-2">Instance-Based:</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700 text-xs">
+                      <li><strong>KNN:</strong> Simple, good for local patterns</li>
+                      <li><strong>Naive Bayes:</strong> Fast probabilistic classifier</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-xs text-yellow-800">
+                    <strong>Tip:</strong> The system automatically tests all relevant algorithms and selects the best performer based on cross-validation metrics.
+                  </p>
                 </div>
               </div>
             </div>
