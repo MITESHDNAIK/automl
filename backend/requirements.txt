@@ -6,5 +6,5 @@ joblib
 sentence-transformers
 plotly
 python-multipart
-xgboost
+# Removed xgboost
 numpy

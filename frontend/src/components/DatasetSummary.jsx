@@ -1,8 +1,10 @@
+// src/components/DatasetSummary.jsx
 import React from 'react';
 import { BarChart3, Target, AlertTriangle, Database, Hash } from 'lucide-react';
 import Plot from 'react-plotly.js';
 
 const DatasetSummary = ({ uploadInfo }) => {
+  // NOTE: uploadInfo is guaranteed to exist when this component is rendered.
   const { stats, numerical_data_for_plot } = uploadInfo;
 
   const summaryCards = [
@@ -43,7 +45,7 @@ const DatasetSummary = ({ uploadInfo }) => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center space-x-2 mb-6">
         <Database className="h-5 w-5 text-blue-600" />
-        <h2 className="text-xl font-semibold text-gray-900">Dataset Summary</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Step 2: Data Review & Summary</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

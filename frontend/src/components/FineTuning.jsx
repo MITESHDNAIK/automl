@@ -1,3 +1,4 @@
+// src/components/FineTuning.jsx
 import React, { useState } from 'react';
 import { Settings, Play, HelpCircle, Info } from 'lucide-react';
 import axios from 'axios';
@@ -21,15 +22,17 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
       perf_plotly: JSON.stringify({
         data: [
           {
-            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes', 'XGBoost'],
-            y: [0.87, 0.942, 0.89, 0.91, 0.85, 0.88, 0.935],
+            // XGBoost removed
+            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes'],
+            y: [0.87, 0.942, 0.89, 0.91, 0.85, 0.88], // Corresponding accuracy values
             type: 'bar',
             name: 'Accuracy',
             marker: { color: '#3B82F6' }
           },
           {
-            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes', 'XGBoost'],
-            y: [0.83, 0.91, 0.86, 0.89, 0.82, 0.85, 0.925],
+            // XGBoost removed
+            x: ['Decision Tree', 'Random Forest', 'Logistic Regression', 'SVM', 'KNN', 'Naive Bayes'],
+            y: [0.83, 0.91, 0.86, 0.89, 0.82, 0.85], // Corresponding F1 Macro values
             type: 'bar',
             name: 'F1 Macro',
             marker: { color: '#8B5CF6' }
@@ -142,7 +145,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <Settings className="h-5 w-5 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Model Configuration</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Step 3: Model Configuration & Training</h2>
           {isDemoMode && (
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
               Demo Mode
@@ -176,7 +179,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
                   <li>Support Vector Machine</li>
                   <li>K-Nearest Neighbors</li>
                   <li>Naive Bayes</li>
-                  <li>XGBoost</li>
+                  {/* XGBoost removed */}
                 </ul>
               </div>
               <div>
@@ -187,7 +190,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
                   <li>Random Forest Regressor</li>
                   <li>Support Vector Regression</li>
                   <li>K-Nearest Neighbors</li>
-                  <li>XGBoost Regressor</li>
+                  {/* XGBoost Regressor removed */}
                 </ul>
               </div>
             </div>
@@ -320,7 +323,7 @@ const FineTuning = ({ uploadInfo, onTrainComplete, loading, setLoading }) => {
                     <ul className="list-disc list-inside space-y-1 text-gray-700 text-xs">
                       <li><strong>Decision Tree:</strong> Interpretable but prone to overfitting</li>
                       <li><strong>Random Forest:</strong> Robust ensemble, handles mixed data well</li>
-                      <li><strong>XGBoost:</strong> State-of-the-art gradient boosting</li>
+                      {/* XGBoost removed */}
                     </ul>
                   </div>
                   

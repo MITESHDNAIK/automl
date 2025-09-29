@@ -53,7 +53,6 @@ def preprocess(df, target_col):
         y = target_encoder.fit_transform(y)
     
     # Scale features for algorithms that need it (SVM, KNN, Neural Networks)
-    # We'll return both scaled and unscaled versions
     scaler = StandardScaler()
     X_scaled = pd.DataFrame(
         scaler.fit_transform(X), 
@@ -61,6 +60,7 @@ def preprocess(df, target_col):
         index=X.index
     )
     
+    # Returns 5 values: X (unscaled), y, X_scaled, encoder, scaler
     return X, y, X_scaled, target_encoder, scaler
 
 def detect_task(y):
@@ -88,9 +88,9 @@ def get_algorithm_recommendations(X, y, task):
     if n_samples < 1000:
         recommendations.extend(["Naive Bayes", "KNN", "Decision Tree"])
     elif n_samples < 10000:
-        recommendations.extend(["Random Forest", "SVM", "XGBoost"])
+        recommendations.extend(["Random Forest", "SVM"]) # Removed XGBoost
     else:
-        recommendations.extend(["XGBoost", "Random Forest", "Linear Regression" if task == "regression" else "Logistic Regression"])
+        recommendations.extend(["Random Forest", "Linear Regression" if task == "regression" else "Logistic Regression"]) # Removed XGBoost
     
     # Feature count considerations
     if n_features > n_samples:  # High-dimensional data
@@ -102,9 +102,9 @@ def get_algorithm_recommendations(X, y, task):
     # Classification specific
     if task == "classification":
         if n_classes == 2:  # Binary classification
-            recommendations.extend(["Logistic Regression", "SVM", "XGBoost"])
+            recommendations.extend(["Logistic Regression", "SVM"]) # Removed XGBoost
         else:  # Multi-class
-            recommendations.extend(["Random Forest", "XGBoost", "Naive Bayes"])
+            recommendations.extend(["Random Forest", "Naive Bayes"]) # Removed XGBoost
     
     return list(set(recommendations))  # Remove duplicates
 

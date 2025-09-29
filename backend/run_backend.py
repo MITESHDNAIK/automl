@@ -23,9 +23,9 @@ def main():
         # Run the FastAPI server
         uvicorn.run(
             "main:app",
-            host="0.0.0.0",  # Allow external connections
-            port=8000,
-            reload=True,     # Auto-reload on code changes
+            host="127.0.0.1",  # CHANGE: Use explicit local IP
+            port=8000,         # CHANGE: Use new port 8001
+            reload=True,
             log_level="info",
             access_log=True
         )

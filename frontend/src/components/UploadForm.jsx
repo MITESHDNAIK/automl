@@ -11,7 +11,7 @@ export default function UploadForm({onUploaded}) {
     const fd = new FormData();
     fd.append("file", file);
     if (target) fd.append("target_column", target);
-    const res = await axios.post("http://localhost:8000/upload", fd);
+    const res = await axios.post('http://localhost:8000/upload', formData)
     onUploaded(res.data);
   }
 

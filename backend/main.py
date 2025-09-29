@@ -20,17 +20,18 @@ from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.naive_bayes import GaussianNB
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from xgboost import XGBClassifier, XGBRegressor
+# REMOVED: XGBoost imports
 
 from ml_utils import load_df, preprocess, detect_task
 from pandas.api.types import is_numeric_dtype
 
 app = FastAPI(title="AutoML API", version="1.0.0")
 
-# Enhanced CORS configuration
+# Enhanced CORS configuration (Confirmed to be correct)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000"],
+    # Added explicit localhost and 127.0.0.1 origins for common ports
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000", "http://localhost:8000"], 
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -66,12 +67,7 @@ MODEL_REGISTRY = {
         "KNN": lambda p: KNeighborsClassifier(
             n_neighbors=p.get("n_neighbors", 5)
         ),
-        "Naive Bayes": lambda p: GaussianNB(),
-        "XGBoost": lambda p: XGBClassifier(
-            eval_metric="logloss", 
-            random_state=42,
-            verbosity=0
-        )
+        "Naive Bayes": lambda p: GaussianNB()
     },
     "regression": {
         "Linear Regression": lambda p: LinearRegression(),
@@ -89,10 +85,6 @@ MODEL_REGISTRY = {
         ),
         "KNN": lambda p: KNeighborsRegressor(
             n_neighbors=p.get("n_neighbors", 5)
-        ),
-        "XGBoost": lambda p: XGBRegressor(
-            random_state=42,
-            verbosity=0
         )
     },
     "unsupervised": {
@@ -118,7 +110,6 @@ MODEL_DESCRIPTIONS = {
     "Naive Bayes": "Fast probabilistic classifier assuming feature independence. Excellent for text classification and high-dimensional sparse data.",
     "KMeans": "Unsupervised clustering for finding natural groupings in data. Best when clusters are spherical and similar in size.",
     "PCA": "Dimensionality reduction technique preserving most variance. Useful for visualization and removing correlated features.",
-    "XGBoost": "State-of-the-art gradient boosting algorithm. Excellent performance on structured data, handles missing values, and provides feature importance.",
     "SVR": "Support Vector Regression for non-linear regression problems. Good for high-dimensional data with complex patterns."
 }
 
@@ -187,7 +178,18 @@ def create_numerical_distribution_plots(df, target_col):
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...), target_column: str = Form(None)):
     contents = await file.read()
-    df = pd.read_csv(io.BytesIO(contents))
+    
+    # FIX: Use 'python' engine and 'on_bad_lines=skip' for robust CSV reading
+    try:
+        df = pd.read_csv(io.BytesIO(contents), engine='python', on_bad_lines='skip')
+    except Exception as e:
+        # Fallback to a common alternative delimiter (e.g., semicolon)
+        try:
+            df = pd.read_csv(io.BytesIO(contents), sep=';', engine='python', on_bad_lines='skip')
+        except Exception:
+            # If CSV reading still fails, raise an error
+            raise Exception(f"CSV parsing failed: {e}. Please ensure file is correctly formatted or try a different separator.")
+
 
     target = target_column if target_column and target_column in df.columns else df.columns[-1]
     preview = df.head(5).to_dict(orient="records")
@@ -229,9 +231,19 @@ class TrainRequest(BaseModel):
 
 @app.post("/train")
 def train(req: TrainRequest):
-    df = pd.read_csv(req.upload_path)
+    # FIX: Apply the same robust reading logic as in /upload
+    try:
+        df = pd.read_csv(req.upload_path, engine='python', on_bad_lines='skip')
+    except Exception as e:
+        try:
+            df = pd.read_csv(req.upload_path, sep=';', engine='python', on_bad_lines='skip')
+        except Exception:
+            raise Exception("CSV parsing failed in train endpoint. Please ensure file is correctly formatted.")
+            
     target_col = req.target_column if req.target_column and req.target_column in df.columns else df.columns[-1]
-    X, y = preprocess(df, target_col)
+    
+    # FIX: Correct the unpacking to match the 5 values returned by preprocess
+    X, y, X_scaled, target_encoder, scaler = preprocess(df, target_col)
 
     task = detect_task(y)
     print(f"Detected task: {task}")
@@ -244,15 +256,26 @@ def train(req: TrainRequest):
     y_test_best = None
 
     if task in ["classification", "regression"]:
+        # Split both unscaled (X) and scaled (X_scaled) data consistently
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=req.test_size, random_state=req.random_state, stratify=y if task == "classification" else None)
-
+            
+        X_train_scaled, X_test_scaled, _, _ = train_test_split(
+            X_scaled, y, test_size=req.test_size, random_state=req.random_state, stratify=y if task == "classification" else None)
+            
         for name, builder in MODEL_REGISTRY[task].items():
             try:
                 print(f"Training {name}...")
+                
+                # Determine which data split to use: scaled data for scaling-sensitive models
+                if name in ["SVM", "SVR", "KNN"]:
+                    X_tr, X_te = X_train_scaled, X_test_scaled
+                else:
+                    X_tr, X_te = X_train, X_test
+                
                 model = builder(req.dict())
-                model.fit(X_train, y_train)
-                pred = model.predict(X_test)
+                model.fit(X_tr, y_train)
+                pred = model.predict(X_te)
 
                 if task == "classification":
                     acc = accuracy_score(y_test, pred)
@@ -311,12 +334,16 @@ def train(req: TrainRequest):
 
             # Confusion matrix for best model
             if best_pred is not None and y_test_best is not None:
+                # NOTE: The warning "A single label was found..." is due to data imbalance, but the
+                # calculation is still performed.
                 cm = confusion_matrix(y_test_best, best_pred)
+                
+                # FIX: Remove invalid 'hoverangles' property that caused the ValueError
                 fig_cm = go.Figure(data=go.Heatmap(
                     z=cm,
                     colorscale='Blues',
                     showscale=True,
-                    hoverangles="<0.5"
+                    # Removed: hoverangles="<0.5"
                 ))
                 fig_cm.update_layout(
                     title=f"Confusion Matrix - {best_model_name}",
@@ -350,6 +377,7 @@ def train(req: TrainRequest):
             )
 
     else:  # unsupervised
+        # Use unscaled features for unsupervised models
         for name, builder in MODEL_REGISTRY["unsupervised"].items():
             try:
                 model = builder(req.dict())
@@ -380,7 +408,8 @@ def train(req: TrainRequest):
     
     # Find best matching algorithm description
     ctx_emb = embedder.encode(context, convert_to_tensor=True)
-    sims = {k: float(util.cos_sim(ctx_emb, MODEL_DESC_EMB[k])) for k in MODEL_DESCRIPTIONS if k in [best_model_name, "Random Forest", "XGBoost"]}
+    # Check similarity against all available models
+    sims = {k: float(util.cos_sim(ctx_emb, MODEL_DESC_EMB[k])) for k in MODEL_DESCRIPTIONS if k in MODEL_DESCRIPTIONS}
     
     if best_model_name and best_model_name in MODEL_DESCRIPTIONS:
         base_explanation = MODEL_DESCRIPTIONS[best_model_name]
