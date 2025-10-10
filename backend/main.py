@@ -173,7 +173,59 @@ def create_numerical_distribution_plots(df, target_col):
             plots_data[col] = df[col].dropna().tolist()
     
     return plots_data
+# ----------  ID3 / Entropy helper  ----------
+def entropy_id3_gain(y: pd.Series, x: pd.Series) -> float:
+    """
+    Classic ID3 information gain:
+        Gain = H(y) – H(y|x)
+    Both series are treated as categorical.
+    """
+    from scipy.stats import entropy
+    y, x = y.astype(str), x.astype(str)
 
+    # base entropy
+    Hy = entropy(y.value_counts(normalize=True), base=2)
+
+    # weighted conditional entropy
+    Hy_x = 0.0
+    for val, grp in y.groupby(x):
+        p_x = len(grp) / len(y)
+        Hy_x += p_x * entropy(grp.value_counts(normalize=True), base=2)
+
+    return Hy - Hy_x
+
+
+# ----------  NEW ENDPOINT  ----------
+class EntropyRequest(BaseModel):
+    upload_path: str
+    target_column: str
+
+
+@app.post("/entropy_gain")
+def entropy_gain(req: EntropyRequest):
+    # same robust read you already use
+    try:
+        df = pd.read_csv(req.upload_path, engine="python", on_bad_lines="skip")
+    except Exception:
+        df = pd.read_csv(req.upload_path, sep=";", engine="python", on_bad_lines="skip")
+
+    target = req.target_column
+    if target not in df.columns:
+        target = df.columns[-1]
+
+    # compute gain only for categorical-like columns
+    gains = {}
+    for col in df.select_dtypes(include=["object", "category", "bool"]):
+        if col == target:
+            continue
+        gains[col] = entropy_id3_gain(df[target], df[col])
+
+    # sort high → low
+    sorted_gain = dict(sorted(gains.items(), key=lambda kv: kv[1], reverse=True))
+    return {
+        "columns": list(sorted_gain.keys()),
+        "gains":  list(sorted_gain.values()),
+    }
 # --- Upload Endpoint ---
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...), target_column: str = Form(None)):
