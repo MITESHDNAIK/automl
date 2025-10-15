@@ -1,7 +1,8 @@
 // src/components/StepNavigation.jsx
 import React from 'react';
+import { Download } from 'lucide-react'; // Import Download icon
 
-const StepNavigation = ({ currentStep, totalSteps, onNext, onBack, isNextDisabled, isStartOver }) => {
+const StepNavigation = ({ currentStep, totalSteps, onNext, onBack, isNextDisabled, isStartOver, onDownloadPdf }) => {
   return (
     <div className="flex justify-between items-center bg-gray-100 p-4 rounded-lg shadow-inner">
       <div className="text-sm font-medium text-gray-600">
@@ -9,6 +10,17 @@ const StepNavigation = ({ currentStep, totalSteps, onNext, onBack, isNextDisable
       </div>
       
       <div className="space-x-3">
+        {/* NEW DOWNLOAD BUTTON */}
+        {currentStep === 4 && onDownloadPdf && (
+           <button
+            onClick={onDownloadPdf}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 shadow-md transition-colors duration-150 flex items-center space-x-1"
+          >
+            <Download className="h-4 w-4" />
+            <span>Download PDF</span>
+          </button>
+        )}
+        
         {currentStep > 1 && !isStartOver && (
           <button
             onClick={onBack}
@@ -45,4 +57,4 @@ const StepNavigation = ({ currentStep, totalSteps, onNext, onBack, isNextDisable
   );
 };
 
-export default StepNavigation;// src/components/StepNavigation.jsx
+export default StepNavigation;

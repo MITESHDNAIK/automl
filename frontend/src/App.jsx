@@ -6,18 +6,20 @@ import FileUpload from './components/FileUpload';
 import DatasetSummary from './components/DatasetSummary';
 import FineTuning from './components/FineTuning';
 import Results from './components/Results';
-import StepNavigation from './components/StepNavigation'; // IMPORTED
+import StepNavigation from './components/StepNavigation'; 
 import './index.css';
+import html2pdf from 'html2pdf.js'; // IMPORT html2pdf
 
 const TOTAL_STEPS = 4;
 
 function App() {
-  const [currentStep, setCurrentStep] = useState(1); // NEW STATE FOR NAVIGATION
+  // ... (State variables remain the same)
+  const [currentStep, setCurrentStep] = useState(1); 
   const [uploadInfo, setUploadInfo] = useState(null);
   const [trainResults, setTrainResults] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Navigation functions
+  // Navigation functions (remain the same)
   const nextStep = () => {
     setCurrentStep(prev => Math.min(prev + 1, TOTAL_STEPS));
   };
@@ -41,6 +43,22 @@ function App() {
     setUploadInfo(null);
     setTrainResults(null);
     setCurrentStep(1); // Reset to Step 1 (Upload)
+  };
+  
+  // NEW FUNCTION: PDF Download
+  const handleDownloadPdf = () => {
+    const element = document.getElementById('results-to-print');
+    
+    // Configuration for the PDF conversion
+    const opt = {
+      margin: [10, 10, 10, 10], // top, left, bottom, right in mm
+      filename: 'AutoML_Results.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 }, // Higher scale for better image quality
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save();
   };
 
   const renderCurrentStep = () => {
@@ -67,8 +85,11 @@ function App() {
           />
         );
       case 4:
+        // WRAP THE RESULTS COMPONENT WITH THE PRINT ID
         return (
-          <Results trainResults={trainResults} />
+          <div id="results-to-print" className="p-4 bg-white rounded-xl shadow-md">
+            <Results trainResults={trainResults} />
+          </div>
         );
       default:
         return null;
@@ -92,6 +113,8 @@ function App() {
             onBack={prevStep}
             isNextDisabled={isNextDisabled || loading}
             isStartOver={currentStep === 4}
+            // NEW PROP FOR PDF DOWNLOAD
+            onDownloadPdf={currentStep === 4 ? handleDownloadPdf : null} 
           />
         </div>
         

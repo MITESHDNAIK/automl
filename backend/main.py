@@ -29,7 +29,7 @@ app = FastAPI(title="AutoML API", version="1.0.0")
 # Enhanced CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000", "http://localhost:8000"], 
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -76,7 +76,7 @@ MODEL_DESCRIPTIONS = {
     "SVR": "Support Vector Regression for non-linear regression problems."
 }
 
-MODEL_DESC_EMB = {k: embedder.encode(v, convert_to_tensor=True) for k,v in MODEL_DESCRIPTIONS.items()}
+MODEL_DESC_EMB = {k: embedder.encode(v, convert_to_tensor=True) for k, v in MODEL_DESCRIPTIONS.items()}
 
 @app.get("/")
 def read_root():
@@ -86,24 +86,16 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
-# NEW: Helper function to get all column data for plotting
+# Helper function to get all column data for plotting
 def get_all_column_data_for_plotting(df: pd.DataFrame):
-    """
-    Prepares all columns' data for frontend plotting.
-    Downsamples large datasets and handles JSON compliance.
-    """
-    # Downsample if the dataframe is too large to prevent sending huge JSON payloads
     if len(df) > 2000:
         df_sample = df.sample(n=2000, random_state=42)
     else:
         df_sample = df
-
     plots_data = {}
     for col in df_sample.columns:
-        # Replace NaN/NaT with None for JSON compatibility. This fixes the error you saw.
         cleaned_series = df_sample[col].where(pd.notna(df_sample[col]), None)
         plots_data[col] = cleaned_series.tolist()
-        
     return plots_data
 
 def create_feature_importance_plot(model, feature_names, model_name):
@@ -114,7 +106,6 @@ def create_feature_importance_plot(model, feature_names, model_name):
             importances = np.abs(model.coef_).flatten()
         else:
             return None
-        
         indices = np.argsort(importances)[::-1][:10]
         fig = go.Figure([go.Bar(x=importances[indices], y=[feature_names[i] for i in indices], orientation='h')])
         fig.update_layout(title=f'Top 10 Feature Importance - {model_name}', yaxis={'autorange': 'reversed'})
@@ -139,7 +130,6 @@ def entropy_gain(req: EntropyRequest):
         df = pd.read_csv(req.upload_path, engine="python", on_bad_lines="skip")
     except Exception:
         df = pd.read_csv(req.upload_path, sep=";", engine="python", on_bad_lines="skip")
-
     target = req.target_column if req.target_column in df.columns else df.columns[-1]
     gains = {col: entropy_id3_gain(df[target], df[col]) for col in df.select_dtypes(include=["object", "category", "bool"]) if col != target}
     sorted_gain = dict(sorted(gains.items(), key=lambda item: item[1], reverse=True))
@@ -152,7 +142,6 @@ async def upload_csv(file: UploadFile = File(...)):
         df = pd.read_csv(io.BytesIO(contents), engine='python', on_bad_lines='skip')
     except Exception:
         df = pd.read_csv(io.BytesIO(contents), sep=';', engine='python', on_bad_lines='skip')
-
     target = df.columns[-1]
     stats = {
         "shape": df.shape,
@@ -160,26 +149,21 @@ async def upload_csv(file: UploadFile = File(...)):
         "n_missing": df.isnull().sum().to_dict(),
         "target": target,
     }
-    
-    # MODIFIED: Use the new function to get data for all columns
     data_for_plotting = get_all_column_data_for_plotting(df)
-    
     save_path = os.path.join("uploads", file.filename)
     os.makedirs("uploads", exist_ok=True)
     with open(save_path, "wb") as f:
         f.write(contents)
-
     return {
         "upload_path": save_path,
         "stats": stats,
-        "data_for_plotting": data_for_plotting # MODIFIED: New data key for the frontend
+        "data_for_plotting": data_for_plotting
     }
 
 class TrainRequest(BaseModel):
     upload_path: str
     target_column: str
     test_size: float = 0.2
-    # Add other model params here as needed
     max_depth: int = None
     n_estimators: int = 100
     kernel: str = "rbf"
@@ -188,55 +172,126 @@ class TrainRequest(BaseModel):
 @app.post("/train")
 def train(req: TrainRequest):
     df = pd.read_csv(req.upload_path, engine='python', on_bad_lines='skip')
-    X, y, X_scaled, _, _ = preprocess(df, req.target_column)
-    task = detect_task(y)
-
+    
+    # 1. Get the original, un-processed target column for final metric calculation (MSE)
+    # FIX: Must reset index to align with X after preprocessing in ml_utils.py
+    y_original_full = df[req.target_column].copy().reset_index(drop=True)
+    
+    # 2. MODIFIED UNPACKING: now receiving 6 values (X, y_processed, X_scaled, target_encoder, feature_scaler, y_scaler)
+    X, y_processed, X_scaled, target_encoder, feature_scaler, y_scaler = preprocess(df, req.target_column)
+    
+    task = detect_task(y_processed)
     results = {}
     best_score = -float('inf')
     best_model_name = None
     best_model = None
 
     if task in ["classification", "regression"]:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=req.test_size, random_state=42, stratify=y if task == "classification" else None)
-        X_train_scaled, X_test_scaled, _, _ = train_test_split(X_scaled, y, test_size=req.test_size, random_state=42, stratify=y if task == "classification" else None)
-
+        # ----------  SAFE STRATIFY LOGIC  ----------
+        stratify = None
+        if task == "classification":
+          n_samples = len(y_processed)
+          n_classes = pd.Series(y_processed).nunique()
+        # sklearn demands: test_size >= n_classes  when stratify is used
+          if n_samples >= 5 and req.test_size * n_samples >= n_classes:
+            min_class_size = pd.Series(y_processed).value_counts().min()
+            stratify = y_processed if min_class_size >= 2 else None
+        
+        # 3. Split all data consistently
+        X_train, X_test, y_train_processed, y_test_processed = train_test_split(
+            X, y_processed, test_size=req.test_size, random_state=42, stratify=stratify
+        )
+        # Split scaled features with the processed target
+        X_train_scaled, X_test_scaled, _, _ = train_test_split(X_scaled, y_processed, test_size=req.test_size, random_state=42, stratify=stratify)
+        
+        # 4. Split the original target for final regression metric calculation (MSE)
+        # y_original_full is now aligned because of the index reset above (Line 185)
+        _, _, y_test_original, _ = train_test_split(
+            X, y_original_full, test_size=req.test_size, random_state=42, stratify=None 
+        )
+        # ----------  END SAFE STRATIFY  ----------
+        
         for name, builder in MODEL_REGISTRY[task].items():
             try:
                 use_scaled = name in ["SVM", "SVR", "KNN", "Logistic Regression", "Linear Regression"]
                 X_tr, X_te = (X_train_scaled, X_test_scaled) if use_scaled else (X_train, X_test)
                 
                 model = builder(req.dict())
-                model.fit(X_tr, y_train)
-                pred = model.predict(X_te)
+                model.fit(X_tr, y_train_processed)
+                pred_processed = model.predict(X_te) # Prediction is in processed space (encoded or scaled)
 
                 if task == "classification":
-                    score = f1_score(y_test, pred, average="macro", zero_division=0)
-                    results[name] = {"accuracy": accuracy_score(y_test, pred), "f1_macro": score, "score": score}
-                else:
-                    score = r2_score(y_test, pred)
-                    results[name] = {"r2": score, "mse": mean_squared_error(y_test, pred), "score": score}
+                    # Classification metrics: use processed (encoded) prediction and test set
+                    score = f1_score(y_test_processed, pred_processed, average="macro", zero_division=0)
+                    results[name] = {"accuracy": accuracy_score(y_test_processed, pred_processed), "f1_macro": score, "score": score}
+                else: # Regression
+                    # FIX: Inverse transform predictions for meaningful MSE calculation
+                    pred = y_scaler.inverse_transform(pred_processed.reshape(-1, 1)).flatten()
+                    
+                    r2_val = r2_score(y_test_processed, pred_processed) # R2 is scale-invariant, use scaled data for consistency with model training
+                    mse_val = mean_squared_error(y_test_original, pred) # MSE uses original unscaled data
+
+                    score = r2_val
+                    results[name] = {"r2": r2_val, "mse": mse_val, "score": score}
 
                 if score > best_score:
                     best_score, best_model_name, best_model = score, name, model
             except Exception as e:
+                # Store the error message
                 results[name] = {"error": str(e), "score": -1}
 
-        # Post-training analysis
+        # --- Start of Safety Block to prevent AttributeError: 'NoneType' object has no attribute 'predict' ---
+        
         df_stats = {"rows": df.shape[0], "cols": df.shape[1], "task": task}
         context = f"Dataset: {df_stats['rows']} rows, {df_stats['cols']} features. Task: {task}."
         ctx_emb = embedder.encode(context, convert_to_tensor=True)
         sims = {k: float(util.cos_sim(ctx_emb, MODEL_DESC_EMB[k])) for k in MODEL_DESCRIPTIONS}
+
+        # Initialize dependent variables to safe defaults
+        explanation = "Multiple algorithms were tested, but an error prevented selection of a best model or successful training of any model. Review the error column for details."
+        confusion_plotly_data = None
+        feature_importance_plotly_data = None
         
-        explanation = "Multiple algorithms were tested."
-        if best_model_name:
+        # Only proceed with prediction and detailed analysis if a best model was found
+        if best_model:
             performance_text = f"achieving a score of {best_score:.3f}."
             explanation = f"Based on your dataset, {best_model_name} performed best, {performance_text} {MODEL_DESCRIPTIONS.get(best_model_name, '')}"
+
+            # Get best model prediction for confusion matrix (must use processed data)
+            X_test_best = X_test_scaled if best_model_name in ["SVM", "SVR", "KNN", "Logistic Regression", "Linear Regression"] else X_test
+            y_pred_best = best_model.predict(X_test_best) 
+            
+            if task == "classification":
+                confusion_plotly_data = json.dumps({
+                    "data": [{"z": confusion_matrix(y_test_processed, y_pred_best).tolist(), "type": "heatmap", "colorscale": "Blues"}],
+                    "layout": {"title": f"Confusion Matrix – {best_model_name}", "xaxis": {"title": "Predicted"}, "yaxis": {"title": "Actual"}}
+                })
+            
+            feature_importance_plotly_data = create_feature_importance_plot(best_model, X.columns.tolist(), best_model_name)
+
+        # --- End of Safety Block ---
 
         return {
             "task": task,
             "results": results,
             "best_model": best_model_name,
-            "feature_importance_plotly": create_feature_importance_plot(best_model, X.columns.tolist(), best_model_name) if best_model else None,
+            "perf_plotly": json.dumps({
+                "data": [
+                    {
+                        "x": list(results.keys()),
+                        "y": [r.get("accuracy" if task == "classification" else "r2", 0) for r in results.values()],
+                        "type": "bar",
+                        "name": "Accuracy" if task == "classification" else "R²",
+                        "marker": {"color": "#3B82F6"}
+                    }
+                ],
+                "layout": {"title": "Model Comparison", "xaxis": {"title": "Model"}, "yaxis": {"title": "Score", "range": [0, 1] if task == 'classification' else [-1, 1]}}
+            }),
+            "confusion_plotly": confusion_plotly_data,
+            "feature_importance_plotly": feature_importance_plotly_data,
             "explanation": explanation,
+            "dataset_stats": df_stats
         }
+    
+    # Return generic error for unsupported tasks (e.g., Unsupervised)
     return {"error": "Unsupervised task not fully implemented"}

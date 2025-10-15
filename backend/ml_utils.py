@@ -12,9 +12,29 @@ def infer_target_column(df, provided=None):
         return provided
     return df.columns[-1]
 
+def detect_task(y):
+    """Enhanced task detection with more sophisticated heuristics"""
+    if pd.api.types.is_numeric_dtype(y):
+        unique_values = len(np.unique(y))
+        total_values = len(y)
+        
+        # If target has very few unique values relative to dataset size, it's likely classification
+        if unique_values <= 10 or unique_values / total_values < 0.05:
+            return "classification"
+        else:
+            return "regression"
+    else:
+        return "classification"
+
+
 def preprocess(df, target_col):
-    """Enhanced preprocessing for multiple algorithm types"""
+    """Enhanced preprocessing for multiple algorithm types. Now includes target scaling for regression."""
     df = df.copy()
+    
+    # --- FIX 1: Reset index immediately to ensure clean starting indices for alignment ---
+    df = df.reset_index(drop=True)
+    # ------------------------------------------------------------------------------------
+
     X = df.drop(columns=[target_col])
     y = df[target_col].copy()
 
@@ -46,11 +66,23 @@ def preprocess(df, target_col):
     # Handle any remaining missing values that might have been introduced
     X = X.fillna(0)
 
-    # Encode target if categorical
+    # Encode/Scale target based on task
     target_encoder = None
-    if y.dtype == object or y.dtype.name == "category":
-        target_encoder = LabelEncoder()
-        y = target_encoder.fit_transform(y)
+    y_scaler = None # Target scaler for regression
+    
+    # --- Target Scaling/Encoding ---
+    if y.dtype == object or y.dtype.name == "category" or detect_task(y) == "classification":
+        # Classification task: Encode target
+        if y.dtype == object or y.dtype.name == "category": # Only encode if non-numeric
+            target_encoder = LabelEncoder()
+            # Ensure the transformed series keeps the correct index if needed, but we reset below
+            y = pd.Series(target_encoder.fit_transform(y), index=y.index) 
+    else:
+        # Regression task: Scale target (Fix for potential zero/null results)
+        y_scaler = StandardScaler()
+        # Ensure the transformed series keeps the correct index if needed, but we reset below
+        y = pd.Series(y_scaler.fit_transform(y.values.reshape(-1, 1)).flatten(), index=y.index)
+    # --- End Target Scaling/Encoding ---
     
     # Scale features for algorithms that need it (SVM, KNN, Neural Networks)
     scaler = StandardScaler()
@@ -60,22 +92,14 @@ def preprocess(df, target_col):
         index=X.index
     )
     
-    # Returns 5 values: X (unscaled), y, X_scaled, encoder, scaler
-    return X, y, X_scaled, target_encoder, scaler
+    # --- FIX 2: Final index reset to guarantee alignment on all returned objects ---
+    X = X.reset_index(drop=True)
+    X_scaled = X_scaled.reset_index(drop=True)
+    y = y.reset_index(drop=True)
+    # ---------------------------------------------------------------------------------
 
-def detect_task(y):
-    """Enhanced task detection with more sophisticated heuristics"""
-    if pd.api.types.is_numeric_dtype(y):
-        unique_values = len(np.unique(y))
-        total_values = len(y)
-        
-        # If target has very few unique values relative to dataset size, it's likely classification
-        if unique_values <= 10 or unique_values / total_values < 0.05:
-            return "classification"
-        else:
-            return "regression"
-    else:
-        return "classification"
+    # Returns 6 values: X, y (encoded/scaled), X_scaled, target_encoder, feature_scaler, y_scaler
+    return X, y, X_scaled, target_encoder, scaler, y_scaler
 
 def get_algorithm_recommendations(X, y, task):
     """Recommend best algorithms based on dataset characteristics"""
