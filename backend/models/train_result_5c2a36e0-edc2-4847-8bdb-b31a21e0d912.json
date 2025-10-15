@@ -1,0 +1,1 @@
+{"status": "completed", "best_model": "Random Forest", "results": {"Linear Regression": {"R\u00b2": 0.341, "RMSE": 2.206}, "Decision Tree": {"R\u00b2": 0.379, "RMSE": 2.141}, "Random Forest": {"R\u00b2": 0.673, "RMSE": 1.553}, "SVR": {"R\u00b2": 0.294, "RMSE": 2.283}, "KNN": {"R\u00b2": 0.352, "RMSE": 2.186}}}

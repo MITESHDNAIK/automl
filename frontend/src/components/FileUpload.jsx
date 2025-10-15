@@ -2,12 +2,17 @@ import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, FileText, AlertCircle, CheckCircle2, Zap, Database } from 'lucide-react';
 import axios from 'axios';
+import { useAutoML } from '../context/automlcontext';
 
-const FileUpload = ({ onUploadSuccess, loading, setLoading }) => {
+const FileUpload = () => {
+  const { setUploadInfo, setUploadPath, loading, setLoading } = useAutoML();
   const [error, setError] = useState(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [uploadData, setUploadData] = useState(null);
+  const [targetColumn, setTargetColumn] = useState(null);
+  const [columns, setColumns] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null); // New state to store the selected file
 
-  // Enhanced sample demo data to showcase all algorithms
   const generateDemoData = () => {
     return {
       upload_path: "/demo/sample_dataset.csv",
@@ -52,7 +57,6 @@ const FileUpload = ({ onUploadSuccess, loading, setLoading }) => {
     };
   };
 
-  // Helper functions to generate realistic demo data
   const generateNormalDistribution = (n, mean, std, min, max) => {
     const data = [];
     for (let i = 0; i < n; i++) {
@@ -76,175 +80,114 @@ const FileUpload = ({ onUploadSuccess, loading, setLoading }) => {
   const generateBetaDistribution = (n, alpha, beta, min, max) => {
     const data = [];
     for (let i = 0; i < n; i++) {
-      // Simplified beta distribution approximation
       let sum = 0;
-      for (let j = 0; j < alpha + beta; j++) {
-        sum += Math.random();
+      for (let j = 0; j < alpha; j++) {
+        sum += Math.log(Math.random());
       }
-      const value = (sum / alpha) / ((sum / alpha) + ((alpha + beta - sum) / beta));
-      const scaled = min + value * (max - min);
-      data.push(Math.round(scaled * 1000) / 1000);
+      let value = Math.pow(1 - Math.exp(-sum / alpha), 1 / beta) * (max - min) + min;
+      data.push(value);
     }
     return data;
   };
 
   const onDrop = useCallback(async (acceptedFiles) => {
-    if (acceptedFiles.length === 0) return;
+    if (acceptedFiles.length === 0) {
+      setError('Please upload a CSV file.');
+      return;
+    }
 
-    const file = acceptedFiles[0];
-    setError(null);
+    const fd = new FormData();
+    fd.append('file', acceptedFiles[0]);
+
     setLoading(true);
+    setError(null);
+    setDemoMode(false);
 
     try {
-      // First try to check if backend is running
-      try {
-        await axios.get('http://localhost:8000/health', { timeout: 3000 });
-      } catch (healthError) {
-        throw new Error('BACKEND_UNAVAILABLE');
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await axios.post('http://localhost:8000/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 10000, // 10 second timeout
-      });
-      
-      onUploadSuccess(response.data);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      
-      if (error.message === 'BACKEND_UNAVAILABLE') {
-        setError({
-          message: 'Backend Server Not Running',
-          details: 'The FastAPI backend server is not running on localhost:8000. Please start the backend server first.',
-          type: 'backend_down',
-          solution: 'Run: python run_backend.py in your backend directory'
-        });
-      } else if (error.code === 'ERR_NETWORK') {
-        setError({
-          message: 'Network Connection Failed',
-          details: 'Unable to connect to the backend server. This could be due to CORS issues or server not running.',
-          type: 'network',
-          solution: 'Check if backend is running on port 8000'
-        });
-      } else {
-        setError({
-          message: 'Upload Failed',
-          details: error.response?.data?.detail || error.message || 'Unknown error occurred',
-          type: 'upload_error'
-        });
-      }
+      const res = await axios.post('http://localhost:8000/upload', fd);
+      setUploadData(res.data);
+      setUploadInfo(res.data);
+      setUploadPath(res.data.upload_path);
+      const cols = Object.keys(res.data.stats.dtypes);
+      setColumns(cols);
+      setTargetColumn(res.data.stats.target || cols[cols.length - 1]);
+      setSelectedFile(acceptedFiles[0]); // Store the selected file
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
     } finally {
       setLoading(false);
     }
-  }, [onUploadSuccess, setLoading]);
+  }, [setUploadInfo, setUploadPath, setLoading]);
 
-  const handleDemoMode = () => {
-    setError(null);
-    setDemoMode(true);
-    setLoading(true);
-    
-    // Simulate upload delay
-    setTimeout(() => {
-      onUploadSuccess(generateDemoData());
-      setLoading(false);
-    }, 1500);
-  };
-
-  const { getRootProps, getInputProps, isDragActive, acceptedFiles } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      'text/csv': ['.csv'],
-    },
-    multiple: false,
+    accept: { 'text/csv': ['.csv'] },
+    maxFiles: 1
   });
 
+  const handleTargetChange = (e) => {
+    setTargetColumn(e.target.value);
+  };
+
+  const handleConfirmTarget = async () => {
+    if (!targetColumn || !uploadData || !selectedFile) return;
+
+    setLoading(true);
+    const fd = new FormData();
+    fd.append('file', selectedFile); // Use the stored file reference
+    fd.append('target_column', targetColumn);
+
+    try {
+      const res = await axios.post('http://localhost:8000/upload', fd);
+      setUploadData(res.data);
+      setUploadInfo(res.data);
+      setUploadPath(res.data.upload_path);
+      setColumns(Object.keys(res.data.stats.dtypes));
+      setError(null); // Clear any previous error
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to confirm target column. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Upload className="h-5 w-5 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Dataset Upload</h2>
-        </div>
-        
-        <button
-          onClick={handleDemoMode}
-          disabled={loading}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 shadow-lg"
-        >
-          <Zap className="h-4 w-4" />
-          <span>Try Demo</span>
-        </button>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl mx-auto">
+      <div className="flex items-center space-x-2 mb-6">
+        <Upload className="h-6 w-6 text-blue-600" />
+        <h2 className="text-xl font-semibold text-gray-900">Step 1: Upload Your Dataset</h2>
       </div>
 
-      {/* Demo Information Panel */}
-      <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
-        <div className="flex items-start space-x-2">
-          <Database className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <h3 className="font-medium text-blue-900 mb-2">Demo Dataset Features</h3>
-            <p className="text-sm text-blue-800 mb-2">
-              The demo includes a realistic financial dataset with 1,500 samples and 12 features:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-blue-700">
-              <div>
-                <strong>Numerical Features:</strong>
-                <ul className="list-disc list-inside ml-2 text-xs">
-                  <li>Age, Income, Education Years</li>
-                  <li>Experience, Credit Score, Debt Ratio</li>
-                </ul>
-              </div>
-              <div>
-                <strong>Categorical Features:</strong>
-                <ul className="list-disc list-inside ml-2 text-xs">
-                  <li>Employment Type, Marital Status</li>
-                  <li>Region, House Ownership, Loan Purpose</li>
-                </ul>
-              </div>
-            </div>
-            <p className="text-xs text-blue-600 mt-2 italic">
-              Perfect for testing classification algorithms with mixed data types!
-            </p>
-          </div>
-        </div>
+      <div className="mb-4">
+        <button
+          onClick={() => {
+            setDemoMode(true);
+            setLoading(true);
+            setTimeout(() => {
+              const demoData = generateDemoData();
+              setUploadData(demoData);
+              setUploadInfo(demoData);
+              setUploadPath(demoData.upload_path);
+              setColumns(Object.keys(demoData.stats.dtypes));
+              setTargetColumn(demoData.stats.target);
+              setLoading(false);
+            }, 2000);
+          }}
+          disabled={loading}
+          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-md hover:from-purple-600 hover:to-blue-600 disabled:opacity-50"
+        >
+          <Zap className="h-4 w-4" />
+          <span>Try with Demo Data</span>
+        </button>
+        <p className="text-xs text-gray-500 mt-2">Demo dataset contains 1,500 rows with mixed data types!</p>
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-start space-x-2">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="font-medium text-red-800">{error.message}</h3>
-              <p className="text-sm text-red-700 mt-1">{error.details}</p>
-              
-              {error.solution && (
-                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800 font-medium">Solution:</p>
-                  <code className="text-xs text-yellow-700 bg-yellow-100 px-2 py-1 rounded mt-1 block">
-                    {error.solution}
-                  </code>
-                </div>
-              )}
-              
-              {error.type === 'backend_down' && (
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-sm text-blue-800 font-medium">Quick Start Guide:</p>
-                  <ol className="text-sm text-blue-700 mt-1 list-decimal list-inside space-y-1">
-                    <li>Navigate to your backend directory</li>
-                    <li>Install dependencies: <code className="bg-blue-100 px-1 rounded">pip install -r requirements.txt</code></li>
-                    <li>Start server: <code className="bg-blue-100 px-1 rounded">python run_backend.py</code></li>
-                    <li>Or use: <code className="bg-blue-100 px-1 rounded">uvicorn main:app --reload</code></li>
-                  </ol>
-                  <p className="text-sm text-blue-600 mt-2 italic">
-                    Alternatively, click "Try Demo" below to explore the interface!
-                  </p>
-                </div>
-              )}
-            </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-start space-x-2">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-red-900">Upload Failed</p>
+            <p className="text-sm text-red-800">{error}</p>
           </div>
         </div>
       )}
@@ -268,11 +211,11 @@ const FileUpload = ({ onUploadSuccess, loading, setLoading }) => {
               </p>
               <p className="text-sm text-gray-600">This may take a few moments</p>
             </>
-          ) : acceptedFiles.length > 0 ? (
+          ) : selectedFile ? (
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <p className="text-lg font-medium text-gray-900">File ready for upload</p>
-              <p className="text-sm text-gray-600">{acceptedFiles[0].name}</p>
+              <p className="text-sm text-gray-600">{selectedFile.name}</p>
             </>
           ) : (
             <>
@@ -306,6 +249,29 @@ const FileUpload = ({ onUploadSuccess, loading, setLoading }) => {
           <strong>New:</strong> Now supports 10+ machine learning algorithms including XGBoost, SVM, and Naive Bayes for comprehensive model comparison!
         </p>
       </div>
+
+      {uploadData && (
+        <div className="mt-4">
+          <h3 className="text-md font-medium text-gray-900">Select Target Column</h3>
+          <select
+            className="w-full p-2 border border-gray-300 rounded-md mt-2"
+            value={targetColumn}
+            onChange={handleTargetChange}
+          >
+            <option value="" disabled>Select a target column</option>
+            {columns.map(col => (
+              <option key={col} value={col}>{col}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleConfirmTarget}
+            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            disabled={!targetColumn || loading}
+          >
+            Confirm Target
+          </button>
+        </div>
+      )}
     </div>
   );
 };
